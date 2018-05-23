@@ -1,0 +1,3 @@
+porty:
+    udp 5115    - broadcast lan server
+    tcp 5123    - default port serveru
