@@ -1686,10 +1686,11 @@ void MainWindow::showGameInfo()
     proxyLabelGameInfoTitle->setPos(0 - (proxyLabelGameInfoTitle->widget()->width() / 2), 0 - (1 * buttonsHeigh) - proxyLabelGameInfoTitle->widget()->height());
     proxyItemList.append(proxyLabelGameInfoTitle);
 
-    QLabel *labelGameInfoFilesFolder = new QLabel(QString(tr("Game files folder: ") + "cesta ke slozce"));
+    QLabel *labelGameInfoFilesFolder = new QLabel(QString(tr("Game files folder: ") + "<a href=\"" + appDataFilePath + "\">" + appDataFilePath + "</a>"));
+    labelGameInfoFilesFolder->setOpenExternalLinks(true);
     labelGameInfoFilesFolder->setStyleSheet(QString("font-weight: bold;"
                                                  "color: rgb(" + QString::number(menuTextColor.red()) + ", " + QString::number(menuTextColor.green()) + ", " + QString::number(menuTextColor.blue()) + ");"
-                                                 "font-size: " + QString::number(buttonsHeigh / 2) + "px;"
+                                                 "font-size: " + QString::number(buttonsHeigh / 4) + "px;"
                                                  "font-family:" + menuButtonFontFamily + ";"));
     labelGameInfoFilesFolder->setAttribute(Qt::WA_TranslucentBackground);
     QGraphicsProxyWidget *proxyLabelGameInfoFilesFolder = gameScene->addWidget(labelGameInfoFilesFolder);
