@@ -38,18 +38,18 @@ MainWindow::MainWindow(QWidget *parent) :
             }
             else
             {
-                QMessageBox::warning(this, this->windowTitle() + "Error", tr("Failed to load application settings! See log for more details."));
+                QMessageBox::warning(this, this->windowTitle() + " - Error", tr("Failed to load application settings! See log for more details."));
             }
         }
         else
         {
             if(fileDownloadIsRunning)
             {
-                QMessageBox::warning(this, this->windowTitle() + "Error", tr("Failed to initialize application system files! App trying to download these files, please wait a couple seconds to finish downloading and try start app again. See log for more details."));
+                QMessageBox::warning(this, this->windowTitle() + " - Error", tr("Failed to initialize application system files! App trying to download these files, please wait a couple seconds to finish downloading and try start app again. See log for more details."));
             }
             else
             {
-                QMessageBox::warning(this, this->windowTitle() + "Error", tr("Failed to initialize application system files! See log for more details."));
+                QMessageBox::warning(this, this->windowTitle() + " - Error", tr("Failed to initialize application system files! See log for more details."));
             }
             exit(2);
         }
@@ -605,6 +605,7 @@ bool MainWindow::startServer()
     connect(server, &QTcpServer::newConnection, this, &MainWindow::serverNewConnection);
     if(server->listen(runningServerInfo.address, runningServerInfo.port))
     {
+        showServerTrayIcon();
         log(LogType::Info, tr("Server started on address ") + runningServerInfo.address.toString() + tr(" and port ") + QString::number(runningServerInfo.port));
         return true;
     }
@@ -635,6 +636,7 @@ void MainWindow::stopServer()
     }
     disconnectAllUsers();
     server->close();
+    hideServerTrayIcon();
     serverIsActive = false;
     log(LogType::Info, tr("Server stopped"));
 }
@@ -711,6 +713,34 @@ void MainWindow::serverSendToAllClients(QByteArray data)
         write.setVersion(QDataStream::Qt_5_0);
         write << tmp;
     }
+}
+
+void MainWindow::showServerTrayIcon()
+{
+    log(LogType::Info, tr("Showing server tray icon"));
+    serverTrayIcon = new QSystemTrayIcon();
+    serverTrayIcon->setIcon(this->windowIcon());
+    serverTrayIcon->setToolTip(QString("The Flat Client" + tr("Server is running")));
+
+    serverTrayIconMenu = new QMenu();
+    QAction *serverTrayMenuStopServer = serverTrayIconMenu->addAction(this->windowIcon(), tr("Stop server"));
+    connect(serverTrayMenuStopServer, SIGNAL(triggered()), this, SLOT(trayMenuStopServer()));
+
+    serverTrayIcon->setContextMenu(serverTrayIconMenu);
+    serverTrayIcon->show();
+    serverTrayIconShowMessage(tr("Server is running"), 5000, this->windowIcon());
+}
+
+void MainWindow::serverTrayIconShowMessage(QString text, int durationMs, QIcon icon)
+{
+    log(LogType::Info, QString(tr("Server tray icon showing message (for duration ") + QString::number(durationMs) + "ms): " + text));
+    serverTrayIcon->showMessage("The Flat Client", text, icon, durationMs);
+}
+
+void MainWindow::hideServerTrayIcon()
+{
+    log(LogType::Info, tr("Hidding server tray icon"));
+    serverTrayIcon->hide();
 }
 
 MainWindow::ServerInfo MainWindow::getServerInfo()
@@ -1606,6 +1636,7 @@ void MainWindow::showLobbyMenu()
 
     QCheckBox *checkLobbyReady = new QCheckBox;
     checkLobbyReady->setChecked(false);
+    checkLobbyReady->setCheckable(false);
     checkLobbyReady->setText(tr("I am ready!"));
     checkLobbyReady->setStyleSheet(QString("font-weight: bold;"
                                            "color: rgb(" + QString::number(menuTextColor.red()) + ", " + QString::number(menuTextColor.green()) + ", " + QString::number(menuTextColor.blue()) + ");"
@@ -1633,33 +1664,43 @@ void MainWindow::showLobbyMenu()
     proxyItemList.append(proxyButtonLobbyDisconnect);
 }
 
-void MainWindow::showDeveloperInfo()
+void MainWindow::showGameInfo()
 {
-    log(LogType::Info, tr("Showing developer info"));
-    this->setWindowTitle(QString(tr("Developers") + " | The Flat"));
+    log(LogType::Info, tr("Showing game info"));
+    this->setWindowTitle(QString(tr("About") + " | The Flat"));
 
     removeProxyItems();
-    gameScene->setBackgroundBrush(QBrush(QPixmap(developerInfoBackgroundFile)));
+    gameScene->setBackgroundBrush(QBrush(QPixmap(gameInfoBackgroundFile)));
 
     int buttonsWidth = 300;
     int buttonsHeigh = 50;
     int buttonsSpacing = 5;
 
-    QLabel *labelDeveloperInfoTitle = new QLabel(tr("Developers"));
-    labelDeveloperInfoTitle->setStyleSheet(QString("font-weight: bold;"
+    QLabel *labelGameInfoTitle = new QLabel(tr("About"));
+    labelGameInfoTitle->setStyleSheet(QString("font-weight: bold;"
                                                  "color: rgb(" + QString::number(menuTextColor.red()) + ", " + QString::number(menuTextColor.green()) + ", " + QString::number(menuTextColor.blue()) + ");"
                                                  "font-size: " + QString::number(buttonsHeigh) + "px;"
                                                  "font-family:" + menuButtonFontFamily + ";"));
-    labelDeveloperInfoTitle->setAttribute(Qt::WA_TranslucentBackground);
-    QGraphicsProxyWidget *proxyLabelDeveloperInfoTitle = gameScene->addWidget(labelDeveloperInfoTitle);
-    proxyLabelDeveloperInfoTitle->setPos(0 - (proxyLabelDeveloperInfoTitle->widget()->width() / 2), 0 - (1 * buttonsHeigh) - proxyLabelDeveloperInfoTitle->widget()->height());
-    proxyItemList.append(proxyLabelDeveloperInfoTitle);
+    labelGameInfoTitle->setAttribute(Qt::WA_TranslucentBackground);
+    QGraphicsProxyWidget *proxyLabelGameInfoTitle = gameScene->addWidget(labelGameInfoTitle);
+    proxyLabelGameInfoTitle->setPos(0 - (proxyLabelGameInfoTitle->widget()->width() / 2), 0 - (1 * buttonsHeigh) - proxyLabelGameInfoTitle->widget()->height());
+    proxyItemList.append(proxyLabelGameInfoTitle);
 
-    QPushButton *buttonDeveloperInfoBack = new GraphicButton(tr("Back"), menuButtonBacgroundFile, buttonsWidth, buttonsHeigh, menuTextColor, menuButtonFontFamily);
-    connect(buttonDeveloperInfoBack, &QPushButton::clicked, this, &MainWindow::onButtonDeveloperInfoBackClicked);
-    QGraphicsProxyWidget *proxyButtonDeveloperInfoBack = gameScene->addWidget(buttonDeveloperInfoBack);
-    proxyButtonDeveloperInfoBack->setPos(0 - (buttonsWidth / 2), 6 * (buttonsHeigh + buttonsSpacing));
-    proxyItemList.append(proxyButtonDeveloperInfoBack);
+    QLabel *labelGameInfoFilesFolder = new QLabel(QString(tr("Game files folder: ") + "cesta ke slozce"));
+    labelGameInfoFilesFolder->setStyleSheet(QString("font-weight: bold;"
+                                                 "color: rgb(" + QString::number(menuTextColor.red()) + ", " + QString::number(menuTextColor.green()) + ", " + QString::number(menuTextColor.blue()) + ");"
+                                                 "font-size: " + QString::number(buttonsHeigh / 2) + "px;"
+                                                 "font-family:" + menuButtonFontFamily + ";"));
+    labelGameInfoFilesFolder->setAttribute(Qt::WA_TranslucentBackground);
+    QGraphicsProxyWidget *proxyLabelGameInfoFilesFolder = gameScene->addWidget(labelGameInfoFilesFolder);
+    proxyLabelGameInfoFilesFolder->setPos(0 - buttonsWidth - (buttonsSpacing / 2), 4 * (buttonsHeigh + buttonsSpacing));
+    proxyItemList.append(proxyLabelGameInfoFilesFolder);
+
+    QPushButton *buttonGameInfoBack = new GraphicButton(tr("Back"), menuButtonBacgroundFile, buttonsWidth, buttonsHeigh, menuTextColor, menuButtonFontFamily);
+    connect(buttonGameInfoBack, &QPushButton::clicked, this, &MainWindow::onButtonGameInfoBackClicked);
+    QGraphicsProxyWidget *proxyButtonGameInfoBack = gameScene->addWidget(buttonGameInfoBack);
+    proxyButtonGameInfoBack->setPos(0 - (buttonsWidth / 2), 6 * (buttonsHeigh + buttonsSpacing));
+    proxyItemList.append(proxyButtonGameInfoBack);
 }
 
 void MainWindow::showGameView()
@@ -1833,7 +1874,7 @@ void MainWindow::onButtonSettingsClicked()
 void MainWindow::onButtonDeveloperInfoClicked()
 {
     log(LogType::Info, tr("Button Developer info in main menu was clicked"));
-    showDeveloperInfo();
+    showGameInfo();
 }
 
 void MainWindow::onButtonQuitClicked()
@@ -2170,10 +2211,26 @@ void MainWindow::onButtonLobbyDisconnectClicked()
     }
 }
 
-void MainWindow::onButtonDeveloperInfoBackClicked()
+void MainWindow::onButtonGameInfoBackClicked()
 {
     log(LogType::Info, tr("Button Back in developer info page was clicked"));
     showMainMenu();
+}
+
+void MainWindow::trayMenuStopServer()
+{
+    log(LogType::Info, tr("User clicked Stop server action in tray menu"));
+    QMessageBox::StandardButton question = QMessageBox::question(this, tr("Stop server?"), tr("Are you sure you want to disconnect from this game?"), QMessageBox::Yes | QMessageBox::No);
+    if(question == QMessageBox::Yes)
+    {
+        log(LogType::Info, tr("User accepted Stop server action from tray menu"));
+        stopServer();
+        showMultiplayerMenu();
+    }
+    else
+    {
+        log(LogType::Info, tr("User declined Stop server action from tray menu"));
+    }
 }
 
 void MainWindow::checkForUpdates()

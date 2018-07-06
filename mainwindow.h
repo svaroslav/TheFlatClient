@@ -27,6 +27,9 @@
 #include <QHostAddress>
 #include <QNetworkInterface>
 
+#include <QSystemTrayIcon>
+#include <QMenu>
+
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -168,7 +171,9 @@ private slots:
     void onCheckLobbyReadyToggled(bool checked);
     void onButtonLobbyDisconnectClicked();
 
-    void onButtonDeveloperInfoBackClicked();
+    void onButtonGameInfoBackClicked();
+
+    void trayMenuStopServer();
 
 private:
     Ui::MainWindow *ui;
@@ -231,8 +236,8 @@ private:
     void serverReadyRead();
     void processReadData(QByteArray data, QTcpSocket *clientPointer);
     void serverDisconnected();
-    bool startServer();
     bool serverIsActive = false;
+    bool startServer();
     void disconnectAllUsers();
     void stopServer();
     void promoteServer();
@@ -252,6 +257,11 @@ private:
     int serverStartingTimeoutInt = 0;
     void serverStartGame();
     void serverSendToAllClients(QByteArray data);
+    void showServerTrayIcon();
+    void serverTrayIconShowMessage(QString text, int durationMs, QIcon icon);
+    void hideServerTrayIcon();
+    QSystemTrayIcon *serverTrayIcon;
+    QMenu *serverTrayIconMenu;
 
     ServerInfo getServerInfo();
     ServerInfo connectedServerInfo;
@@ -327,8 +337,8 @@ private:
     void showLobbyMenu();
     QString lobbyMenuBackgroundFile = "Sources/Textures/plank_birch.png";
 
-    void showDeveloperInfo();
-    QString developerInfoBackgroundFile = "Sources/Textures/plank_accacia.png";
+    void showGameInfo();
+    QString gameInfoBackgroundFile = "Sources/Textures/plank_accacia.png";
 
     void showGameView();
     QString gameViewBackgroundFile = "Sources/Textures/plank_pine.png";
