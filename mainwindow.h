@@ -282,6 +282,7 @@ private:
     QList<ServerInfo> savedServerList;
     QList<ServerInfo> LANServerList;
     ClientState clientConnectionState = ClientState::Disconnected;
+    void sendDataToServer(QByteArray data);
 
     GameView *gameView;
     QGraphicsScene *gameScene;

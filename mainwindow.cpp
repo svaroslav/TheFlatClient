@@ -720,7 +720,7 @@ void MainWindow::showServerTrayIcon()
     log(LogType::Info, tr("Showing server tray icon"));
     serverTrayIcon = new QSystemTrayIcon();
     serverTrayIcon->setIcon(this->windowIcon());
-    serverTrayIcon->setToolTip(QString("The Flat Client" + tr("Server is running")));
+    serverTrayIcon->setToolTip(QString("The Flat Client - " + tr("Server is running")));
 
     serverTrayIconMenu = new QMenu();
     QAction *serverTrayMenuStopServer = serverTrayIconMenu->addAction(this->windowIcon(), tr("Stop server"));
@@ -728,7 +728,7 @@ void MainWindow::showServerTrayIcon()
 
     serverTrayIcon->setContextMenu(serverTrayIconMenu);
     serverTrayIcon->show();
-    serverTrayIconShowMessage(tr("Server is running"), 5000, this->windowIcon());
+    serverTrayIconShowMessage(QString(tr("Server \"") + runningServerInfo.name + tr("\" has been started")), 5000, this->windowIcon());
 }
 
 void MainWindow::serverTrayIconShowMessage(QString text, int durationMs, QIcon icon)
@@ -741,6 +741,7 @@ void MainWindow::hideServerTrayIcon()
 {
     log(LogType::Info, tr("Hidding server tray icon"));
     serverTrayIcon->hide();
+    delete serverTrayIcon;//vyzkouset
 }
 
 MainWindow::ServerInfo MainWindow::getServerInfo()
@@ -927,6 +928,17 @@ void MainWindow::udpSocketPendingDatagram()
                 }
             }
         }
+    }
+}
+
+void MainWindow::sendDataToServer(QByteArray data)
+{
+    if(clientConnectionState != ClientState::Disconnected)
+    {
+        log(LogType::Info, tr("Sending data to server"));
+        QDataStream write(clientSocket);
+        write.setVersion(QDataStream::Qt_5_0);
+        write << data;
     }
 }
 
@@ -2177,6 +2189,10 @@ void MainWindow::onCheckLobbyReadyToggled(bool checked)
             serverSendToAllClients(data);
             stopBroadcastInfo();
         }
+    }
+    else
+    {
+
     }
 }
 
