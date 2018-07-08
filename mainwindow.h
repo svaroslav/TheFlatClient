@@ -117,10 +117,11 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
     enum LogType {Info, Warning, Error, Game, Server, Player};
-    enum ClientState {Disconnected, Connecting, Authenticated, InLobby, InGame, Spectator};
+    enum ClientState {Disconnected, Connecting, LoggingIn, Authenticated, InLobby, InGame, Spectator};
 
 public slots:
     void log(LogType type, QString text);
+    QString translate(QString text);
 
 private slots:
     void updateCheckFinished(QNetworkReply*reply);
@@ -134,7 +135,7 @@ private slots:
     void onButtonSinglePlayerClicked();
     void onButtonMultiPlayerClicked();
     void onButtonSettingsClicked();
-    void onButtonDeveloperInfoClicked();
+    void onButtonGameInfoClicked();
     void onButtonQuitClicked();
 
     void onButtonMultiplayerCreateServerClicked();
@@ -144,6 +145,8 @@ private slots:
     void onButtonMultiplayerConnectClicked();
     void onButtonMultiplayerAddClicked();
     void onButtonMultiplayerConnectLANClicked();
+
+    void onButtonConnectingToServerCancelClicked();
 
     void onButtonAddServerAddClicked();
     void onButtonAddServerBackClicked();
@@ -214,6 +217,9 @@ private:
                                     << "farmland_melon_growth_one.png");
     Settings settings;
 
+    QJsonArray currentLanguageTextObjectArray = QJsonArray();
+    void loadLanguageFromFile(QString language);
+
     void downloadAppFile(QString fileName);
     QString fileServerUrl = "http://192.168.0.8/theflat/Sources/";
     QNetworkAccessManager downloadManager;
@@ -267,9 +273,10 @@ private:
     ServerInfo connectedServerInfo;
 
     QTcpSocket *clientSocket;
-    bool connectToServer(QHostAddress address, int port);
-    bool connectingToServerCanceled = false;
+    void connectToServer(QHostAddress address, int port);
+    bool connectingToServer = false;
     bool connectedToServer = false;
+    void cancelConnectingToServer();
     void socketConnectedToServer();
     void connectingToServerTimeout();
     void listenForBroadcast();
@@ -316,6 +323,8 @@ private:
     QString multiplayerMenuBackgroundFile = "Sources/Textures/plank_oak.png";
     QListWidget *listMultiplayerServers;
     QListWidget *listMultiplayerLANServers;
+
+    void showConnectingToServerSign();
 
     void showAddServerMenu();
     QString addServerMenuBackgroundFile = "Sources/Textures/plank_oak.png";

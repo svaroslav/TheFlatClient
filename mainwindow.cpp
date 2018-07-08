@@ -19,6 +19,7 @@ MainWindow::MainWindow(QWidget *parent) :
             if(loadSettingsFromFile())
             {
                 log(LogType::Info, tr("Settings reading done"));
+                loadLanguageFromFile(settings.language);
                 if(settings.debugMode)
                 {
                     showDebugConsoleDock();
@@ -199,6 +200,19 @@ bool MainWindow::checkAppFiles()
 
     ui->progressLoading->setValue(ui->progressLoading->value() + 1);
 
+    QDir languagesFolder("Sources/Languages");
+    if(!languagesFolder.exists())
+    {
+        log(LogType::Warning, tr("'Languages' folder not found, creating"));
+        if(!languagesFolder.mkdir(QDir::currentPath() + "/Sources/Languages"))
+        {
+            err = true;
+            log(LogType::Error, tr("Failed to create 'Languages' folder"));
+        }
+    }
+
+    ui->progressLoading->setValue(ui->progressLoading->value() + 1);
+
     QDir texturesFolder("Sources/Textures");
     if(!texturesFolder.exists())
     {
@@ -264,6 +278,69 @@ bool MainWindow::checkAppFiles()
     return !err;//pokud proběhne bez chyby, vrátí true
 }
 
+void MainWindow::loadLanguageFromFile(QString language)
+{
+    log(LogType::Info, QString(tr("Loading language data for ") + language));
+    bool err = false;
+    if(language != "en_UK")
+    {
+        QFile file(QString(QDir::currentPath() + "/Sources/Languages/" + language + ".tfl"));
+        if(file.exists())
+        {
+            if(file.open(QIODevice::ReadOnly))
+            {
+                QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+                if(doc.isObject())
+                {
+                    QJsonObject obj = doc.object();
+                    if(obj.contains("language") && obj["language"].isString() && obj.contains("translations") && obj["translations"].isArray())
+                    {
+                        if(obj["language"] == language)
+                        {
+                            currentLanguageTextObjectArray = obj["translations"].toArray();
+                            log(LogType::Info, QString(tr("Using language - ") + language));
+                        }
+                        else
+                        {
+                            LogType::Warning, tr("Language file is not for selected language");
+                            err = true;
+                        }
+                    }
+                    else
+                    {
+                        log(LogType::Error, tr("Language file not contain required data"));
+                        err = true;
+                    }
+                }
+                else
+                {
+                    log(LogType::Error, tr("Language file is not valid"));
+                    err = true;
+                }
+            }
+            else
+            {
+                log(LogType::Error, tr("Failed to open language file"));
+                err = true;
+            }
+        }
+        else
+        {
+            log(LogType::Warning, tr("Selected language file not found"));
+            err = true;
+        }
+    }
+    else
+    {
+        err = true;
+    }
+
+    if(err)
+    {
+        log(LogType::Info, tr("Using system default language - en_UK"));
+    }
+}
+
 void MainWindow::downloadAppFile(QString fileName)
 {
     fileDownloadIsRunning = true;
@@ -281,7 +358,7 @@ bool MainWindow::loadSettingsFromFile()
     log(LogType::Info, tr("Loading common settings"));
     ui->labelLoading->setText(tr("Loading common settings"));
 
-    QFile commonFile(QString(appDataFilePath + "/Settings/common.flat"));
+    QFile commonFile(QString(appDataFilePath + "/Settings/common.tfs"));
     if(!commonFile.exists())
     {
         if(!commonFile.open(QIODevice::WriteOnly))
@@ -354,7 +431,7 @@ bool MainWindow::loadSettingsFromFile()
     log(LogType::Info, tr("Loading user interface settings"));
     ui->labelLoading->setText(tr("Loading user interface settings"));
 
-    QFile userInterfaceFile(QString(appDataFilePath + "/Settings/userInterface.flat"));
+    QFile userInterfaceFile(QString(appDataFilePath + "/Settings/userInterface.tfs"));
     if(!userInterfaceFile.exists())
     {
         if(!userInterfaceFile.open(QIODevice::WriteOnly))
@@ -427,7 +504,7 @@ bool MainWindow::loadSettingsFromFile()
     log(LogType::Info, tr("Loading sounds settings"));
     ui->labelLoading->setText(tr("Loading sounds settings"));
 
-    QFile soundsFile(QString(appDataFilePath + "/Settings/sounds.flat"));
+    QFile soundsFile(QString(appDataFilePath + "/Settings/sounds.tfs"));
     if(!soundsFile.exists())
     {
         if(!soundsFile.open(QIODevice::WriteOnly))
@@ -480,7 +557,7 @@ bool MainWindow::loadSettingsFromFile()
         if(obj.contains("soundVolume") && obj["soundVolume"].isString())
         {
             settings.soundVolume = obj["soundVolume"].toString().toInt();
-            qDebug() << "settings loaded sound volume" << obj["soundVolume"].toString().toInt();
+//            qDebug() << "settings loaded sound volume" << obj["soundVolume"].toString().toInt();
         }
     }
 
@@ -756,45 +833,50 @@ MainWindow::ServerInfo MainWindow::getServerInfo()
     }
 }
 
-bool MainWindow::connectToServer(QHostAddress address, int port)
+void MainWindow::connectToServer(QHostAddress address, int port)
 {
-    log(LogType::Info, tr("Connecting to server ") + address.toString() + ":" + QString::number(port));
-
-    clientSocket = new QTcpSocket;
-
-    clientSocket->connectToHost(address, port);
-    connect(clientSocket, &QTcpSocket::connected, this, &MainWindow::socketConnectedToServer);
-    connect(clientSocket, &QTcpSocket::readyRead, this, &MainWindow::clientReadyRead);
-    QTimer *connectingTimeout = new QTimer;
-    connectingTimeout->setInterval(10000);//10 sekund
-    connectingTimeout->start();
-    connect(connectingTimeout, &QTimer::timeout, this, &MainWindow::connectingToServerTimeout);
-    while(true)
+    if(clientConnectionState == ClientState::Disconnected || connectingToServer == false)
     {
-        if(connectedToServer == true)
-        {
-            return true;
-        }
-        if(connectingToServerCanceled)
-        {
-            connectingToServerCanceled = false;
-            return false;
-        }
+        log(LogType::Info, tr("Connecting to server ") + address.toString() + ":" + QString::number(port));
+
+        connectingToServer = true;
+        clientConnectionState = ClientState::Connecting;
+
+        clientSocket = new QTcpSocket;
+
+        clientSocket->connectToHost(address, port);
+        connect(clientSocket, &QTcpSocket::connected, this, &MainWindow::socketConnectedToServer);
+        connect(clientSocket, &QTcpSocket::readyRead, this, &MainWindow::clientReadyRead);
+        QTimer *connectingTimeout = new QTimer;
+        connectingTimeout->setInterval(10000);//10 sekund
+        connectingTimeout->start();
+        connect(connectingTimeout, &QTimer::timeout, this, &MainWindow::connectingToServerTimeout);
     }
+    else
+    {
+        log(LogType::Warning, tr("Could not connect to server now - connection allready in progress"));
+    }
+}
+
+void MainWindow::cancelConnectingToServer()
+{
+    clientSocket->disconnectFromHost();
+    connectingToServer = false;
+
 }
 
 void MainWindow::socketConnectedToServer()
 {
-    log(LogType::Info, tr("Connected to server"));
+    log(LogType::Info, tr("Connected to server, logging in"));
     connectedToServer = true;
-    clientConnectionState = ClientState::Connecting;
+    clientConnectionState = ClientState::LoggingIn;
 
 
 }
 
 void MainWindow::connectingToServerTimeout()
 {
-    connectingToServerCanceled = true;
+    cancelConnectingToServer();
 }
 
 void MainWindow::listenForBroadcast()
@@ -814,8 +896,15 @@ void MainWindow::stopListeningForBroadcast()
 
 void MainWindow::disconnectFromServer()
 {
-    clientSocket->disconnectFromHost();
-    log(LogType::Info, tr("Disconnected from server"));
+    if(clientConnectionState != ClientState::Disconnected)
+    {
+        clientSocket->disconnectFromHost();
+        log(LogType::Info, tr("Disconnected from server"));
+    }
+    else
+    {
+        log(LogType::Warning, tr("Unable to disconnected from server - not connected now"));
+    }
 }
 
 void MainWindow::clientReadyRead()
@@ -845,7 +934,7 @@ void MainWindow::clientProcessReadData(QByteArray data)
         }
         else
         {
-            qDebug() << "Incoming data is not containing action data";
+            qDebug() << "Incoming data is not containing action parameter";
         }
     }
     else
@@ -870,49 +959,14 @@ void MainWindow::udpSocketPendingDatagram()
             {
                 bool err = false;
                 ServerInfo tmp;
-                if(obj.contains("name") && obj["name"].isString())
+                if(obj.contains("name") && obj["name"].isString() && obj.contains("address") && obj["address"].isString() && obj.contains("quickDescribtion") && obj["quickDescribtion"].isString() && obj.contains("port") && obj["port"].isString() && obj.contains("quickDescribtion") && obj["quickDescribtion"].isString())
                 {
                     tmp.name = obj["name"].toString();
-                }
-                else
-                {
-                    err = true;
-                }
-                if(obj.contains("address") && obj["address"].isString())
-                {
                     tmp.address = QHostAddress(obj["address"].toString());
-                }
-                else
-                {
-                    err = true;
-                }
-                if(obj.contains("quickDescribtion") && obj["quickDescribtion"].isString())
-                {
                     tmp.quickDescribtion = obj["quickDescribtion"].toString();
-                }
-                else
-                {
-                    err = true;
-                }
-                if(obj.contains("port") && obj["port"].isString())
-                {
                     tmp.port = obj["port"].toString().toInt();
-                }
-                else
-                {
-                    err = true;
-                }
-                if(obj.contains("quickDescribtion") && obj["quickDescribtion"].isString())
-                {
                     tmp.quickDescribtion = obj["quickDescribtion"].toString();
-                }
-                else
-                {
-                    err = true;
-                }
 
-                if(!err)
-                {
                     QListWidgetItem *item = new QListWidgetItem;
                     item->setIcon(tmp.icon);
                     item->setText(tmp.name);
@@ -924,7 +978,7 @@ void MainWindow::udpSocketPendingDatagram()
                 }
                 else
                 {
-                    qDebug() << "nejaky err";
+                    qDebug() << "nejaky err (while processing received broadcast)";
                 }
             }
         }
@@ -939,6 +993,10 @@ void MainWindow::sendDataToServer(QByteArray data)
         QDataStream write(clientSocket);
         write.setVersion(QDataStream::Qt_5_0);
         write << data;
+    }
+    else
+    {
+        log(LogType::Error, tr("Could not send data to server - Invalid client state"));
     }
 }
 
@@ -1009,11 +1067,11 @@ void MainWindow::showMainMenu()
     proxyButtonSettings->setPos(0 - (buttonsWidth / 2), 2 * (buttonsHeight + buttonsSpacing));
     proxyItemList.append(proxyButtonSettings);
 
-    QPushButton *buttonDeveloperInfo = new GraphicButton(tr("Developers"), menuButtonBacgroundFile, buttonsWidth, buttonsHeight, menuTextColor, menuButtonFontFamily);
-    connect(buttonDeveloperInfo, &QPushButton::clicked, this, &MainWindow::onButtonDeveloperInfoClicked);
-    QGraphicsProxyWidget *proxyButtonDeveloperInfo = gameScene->addWidget(buttonDeveloperInfo);
-    proxyButtonDeveloperInfo->setPos(0 - (buttonsWidth / 2), 3 * (buttonsHeight + buttonsSpacing));
-    proxyItemList.append(proxyButtonDeveloperInfo);
+    QPushButton *buttonGameInfo = new GraphicButton(tr("About"), menuButtonBacgroundFile, buttonsWidth, buttonsHeight, menuTextColor, menuButtonFontFamily);
+    connect(buttonGameInfo, &QPushButton::clicked, this, &MainWindow::onButtonGameInfoClicked);
+    QGraphicsProxyWidget *proxyButtonGameInfo = gameScene->addWidget(buttonGameInfo);
+    proxyButtonGameInfo->setPos(0 - (buttonsWidth / 2), 3 * (buttonsHeight + buttonsSpacing));
+    proxyItemList.append(proxyButtonGameInfo);
 
     QPushButton *buttonQuit = new GraphicButton(tr("Quit"), menuButtonBacgroundFile, buttonsWidth, buttonsHeight, menuTextColor, menuButtonFontFamily);
     connect(buttonQuit, &QPushButton::clicked, this, &MainWindow::onButtonQuitClicked);
@@ -1188,7 +1246,7 @@ void MainWindow::saveSettings()
 bool MainWindow::saveSettingsToFile()
 {
     bool err = false;
-    QFile commonFile(QString(appDataFilePath + "/Settings/common.flat"));
+    QFile commonFile(QString(appDataFilePath + "/Settings/common.tfs"));
     if(!commonFile.exists())
     {
         log(LogType::Error, tr("Common configuration file not found!"));
@@ -1220,7 +1278,7 @@ bool MainWindow::saveSettingsToFile()
         commonFile.close();
     }
 
-    QFile userInterfaceFile(QString(appDataFilePath + "/Settings/userInterface.flat"));
+    QFile userInterfaceFile(QString(appDataFilePath + "/Settings/userInterface.tfs"));
     if(!userInterfaceFile.exists())
     {
         log(LogType::Error, tr("User interface configuration file not found!"));
@@ -1252,7 +1310,7 @@ bool MainWindow::saveSettingsToFile()
         userInterfaceFile.close();
     }
 
-    QFile soundsFile(QString(appDataFilePath + "/Settings/sounds.flat"));
+    QFile soundsFile(QString(appDataFilePath + "/Settings/sounds.tfs"));
     if(!soundsFile.exists())
     {
         log(LogType::Error, tr("Sounds configuration file not found!"));
@@ -1384,6 +1442,35 @@ void MainWindow::showMultiplayerMenu()
     listenForBroadcast();
 }
 
+void MainWindow::showConnectingToServerSign()
+{
+    log(LogType::Info, tr("Showing Connecting to server sign"));
+    this->setWindowTitle(QString(tr("Connecting") + " | The Flat"));
+
+    removeProxyItems();
+    gameScene->setBackgroundBrush(QBrush(QPixmap(multiplayerMenuBackgroundFile)));
+
+    int buttonsWidth = 300;
+    int buttonsHeight = 50;
+    int buttonsSpacing = 5;
+
+    QLabel *labelConnectingToServerTitle = new QLabel(tr("Connecting to server"));
+    labelConnectingToServerTitle->setStyleSheet(QString("font-weight: bold;"
+                                                 "color: rgb(" + QString::number(menuTextColor.red()) + ", " + QString::number(menuTextColor.green()) + ", " + QString::number(menuTextColor.blue()) + ");"
+                                                 "font-size: " + QString::number(buttonsHeight) + "px;"
+                                                 "font-family:" + menuButtonFontFamily + ";"));
+    labelConnectingToServerTitle->setAttribute(Qt::WA_TranslucentBackground);
+    QGraphicsProxyWidget *proxyLabelConnectingToServerTitle = gameScene->addWidget(labelConnectingToServerTitle);
+    proxyLabelConnectingToServerTitle->setPos(0 - (proxyLabelConnectingToServerTitle->widget()->width() / 2), 0 - (1 * buttonsHeight) - proxyLabelConnectingToServerTitle->widget()->height());
+    proxyItemList.append(proxyLabelConnectingToServerTitle);
+
+    QPushButton *buttonConnectingToServerCancel = new GraphicButton(tr("Cancel"), menuButtonBacgroundFile, (buttonsWidth / 2) - (buttonsSpacing / 2), buttonsHeight, menuTextColor, menuButtonFontFamily);
+    connect(buttonConnectingToServerCancel, &QPushButton::clicked, this, &MainWindow::onButtonConnectingToServerCancelClicked);
+    QGraphicsProxyWidget *proxyButtonConnectingToServerCancel = gameScene->addWidget(buttonConnectingToServerCancel);
+    proxyButtonConnectingToServerCancel->setPos(0 - (buttonsWidth / 4), 1 * (buttonsHeight + buttonsSpacing));
+    proxyItemList.append(proxyButtonConnectingToServerCancel);
+}
+
 void MainWindow::showAddServerMenu()
 {
     log(LogType::Info, tr("Showing add server menu"));
@@ -1484,7 +1571,7 @@ void MainWindow::addServerSave(QString name, QString address, int port)
         proxyItemList.append(proxyLabelAddServerWaitDns);
 
         QHostInfo::lookupHost(address, this, SLOT(onDnsLookup(QHostInfo)));
-        QTimer::singleShot(15000, this, &MainWindow::onDnsLookupTimeout);//15 sekund
+//        QTimer::singleShot(15000, this, &MainWindow::onDnsLookupTimeout);//15 sekund
     }
     else
     {
@@ -1503,7 +1590,8 @@ void MainWindow::addServerSaveFinal()
 
 void MainWindow::onDnsLookupTimeout()
 {
-    qDebug() << "dns lookupt timeout";
+    log(LogType::Info, tr("DNS lookup for new server timed out - unknow domain name"));
+    showAddServerMenu();
 }
 
 void MainWindow::showCreateServerMenu()
@@ -1794,6 +1882,20 @@ void MainWindow::log(LogType type, QString text)
     out << timestamp << " [" << typeText << "] " << text << endl;
 }
 
+QString MainWindow::translate(QString text)
+{
+    for(int i = 0; i < currentLanguageTextObjectArray.size(); ++i)
+    {
+        QJsonObject tmpObj = currentLanguageTextObjectArray.at(i).toObject();
+        if(tmpObj["from"] == text)
+        {
+            return tmpObj["to"].toString();
+            break;
+        }
+    }
+    return text;
+}
+
 void MainWindow::updateCheckFinished(QNetworkReply *reply)
 {
     QByteArray response = reply->readAll();
@@ -1860,6 +1962,13 @@ void MainWindow::onDnsLookup(QHostInfo info)
         }
         addServerSaveFinal();
     }
+    else
+    {
+        log(LogType::Info, QString(tr("DNS lookup for new server completed with error: ") + info.errorString()));
+
+        QMessageBox::StandardButton infoMessage = QMessageBox::information(this, tr("Info"), QString(tr("DNS lookup for new server completed with error: ") + info.errorString()), QMessageBox::Ok);
+        showAddServerMenu();
+    }
 }
 
 void MainWindow::onBackgroundAudioPlaylistPositionChanged(int position)
@@ -1884,7 +1993,7 @@ void MainWindow::onButtonSettingsClicked()
     showSettingsMenu();
 }
 
-void MainWindow::onButtonDeveloperInfoClicked()
+void MainWindow::onButtonGameInfoClicked()
 {
     log(LogType::Info, tr("Button Developer info in main menu was clicked"));
     showGameInfo();
@@ -2028,6 +2137,7 @@ void MainWindow::onButtonMultiplayerConnectClicked()
     QStringList itemDataList = itemData.split(":");
     QHostAddress address = QHostAddress(itemDataList.at(0));
     int port = itemDataList.at(1).toInt();
+    stopListeningForBroadcast();
     connectToServer(address, port);
 }
 
@@ -2041,6 +2151,12 @@ void MainWindow::onButtonMultiplayerAddClicked()
 void MainWindow::onButtonMultiplayerConnectLANClicked()
 {
     log(LogType::Info, tr("Button Connect LAN in multiplayer menu was clicked"));
+}
+
+void MainWindow::onButtonConnectingToServerCancelClicked()
+{
+    log(LogType::Info, tr("Button Cancel in Connecting to server sign was clicked"));
+    cancelConnectingToServer();
 }
 
 void MainWindow::onButtonAddServerAddClicked()
