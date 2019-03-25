@@ -1786,7 +1786,7 @@ void MainWindow::showGameInfo()
     proxyLabelGameInfoTitle->setPos(0 - (proxyLabelGameInfoTitle->widget()->width() / 2), 0 - (1 * buttonsHeigh) - proxyLabelGameInfoTitle->widget()->height());
     proxyItemList.append(proxyLabelGameInfoTitle);
 
-    QLabel *labelGameInfoFilesFolder = new QLabel(QString(tr("Game files folder: ") + "<a href=\"" + appDataFilePath + "\">" + appDataFilePath + "</a>"));
+    QLabel *labelGameInfoFilesFolder = new QLabel(QString(tr("Game files folder: ") + "<a href=\"" + QDir::toNativeSeparators(appDataFilePath) + "\">" + appDataFilePath + "</a>"));
     labelGameInfoFilesFolder->setOpenExternalLinks(true);
     labelGameInfoFilesFolder->setStyleSheet(QString("font-weight: bold;"
                                                  "color: rgb(" + QString::number(menuTextColor.red()) + ", " + QString::number(menuTextColor.green()) + ", " + QString::number(menuTextColor.blue()) + ");"
